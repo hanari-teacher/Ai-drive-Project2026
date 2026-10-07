@@ -39,8 +39,8 @@ app.get('/api/db-check', async (_req: Request, res: Response) => {
   }
 });
 
-type Product = { id: number; name: string; price: number };
 
+type Product = { id: number; name: string; price: number };
 app.get('/db-sample', async (_req, res) => {
   try {
     const result = await pool.query<Product>(
@@ -52,6 +52,7 @@ app.get('/db-sample', async (_req, res) => {
     res.status(503).send('商品一覧を表示できません');
   }
 });
+
 
 // ------------------------------
 // サーバー起動
