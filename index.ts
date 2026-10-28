@@ -23,7 +23,7 @@ app.set('views', path.join(process.cwd(), 'views')); // EJSファイルを保存
 
 // 「/」にアクセスされたときの処理
 app.get('/', (req: Request, res: Response): void => {
-  res.send('テスト！２');
+  res.send('テスト！3');
 });
 
 app.get('/api/db-check', async (_req, res) => {
