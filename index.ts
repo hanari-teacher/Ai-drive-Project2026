@@ -4,6 +4,8 @@ import { pool } from './db'; //DB設定を読み込み
 
 //TODOアプリ
 import todoRouter from './src/apps/todo/todoRouter';
+//TODO_v1 アプリ
+import todoRouter_v1 from './src/apps/todo_v1/todoRouter';
 
 const app = express(); // Expressアプリケーションを作成
 const port: number = 3000; // ローカルで使用するポート番号
@@ -111,6 +113,14 @@ app.post('/db-sample/:id/delete', async (req, res) => {
 //TODOアプリ
 app.use('/todo', todoRouter);
 app.use(todoRouter); // /api/v1/todos のパスを含むためそのまま利用可能
+
+// TODO画面用ルート
+app.get('/todo_v1', (req, res) => {
+  res.render('todo_v1/index.ejs'); // ※プロジェクトのビュー設定パスに合わせて調整
+});
+
+// TODO REST API
+app.use('/api/v1/todo', todoRouter_v1);
 
 // ------------------------------
 // サーバー起動
