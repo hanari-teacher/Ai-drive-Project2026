@@ -1,123 +1,166 @@
-# TODOアプリ 実装手順書 (`docs/todo/03_implementation_plan.md`)
+# TODOアプリ V1 実装手順書 (`docs/todo/03_implementation_plan.md`)
 
-本手順書は、Express ＋ TypeScript ＋ EJS、Neon PostgreSQL、Vercel環境を用いたTODOアプリの実装・構築ステップを定義するものです。
-
----
-
-## 1. 実装フェーズ概要
-
-以下の5つのステップに分けて実装を進めます。
-
-1. **Step 1: データベースの準備とマイグレーション**
-2. **Step 2: バックエンドモデル・コントローラー・ルーターの実装**
-3. **Step 3: フロントエンド（EJS画面 ＆ Tailwind CSS）の実装**
-4. **Step 4: ブラウザ用JavaScript (`TodoApi` クラス) の実装と結合**
-5. **Step 5: ローカル動作確認およびVercelデプロイ検証**
+本手順書は、`01_requirements.md` および `02_design.md` に基づき、既存の Express ＋ TypeScript ＋ EJS 構成に TODOアプリ（v1）を安全に実装・デプロイするためのステップを定義したものです。
 
 ---
 
-## 2. 詳細な実装ステップ
+## 全体の前提確認（用語・仕様の一致）
 
-### Step 1: データベースの準備とマイグレーション
+* **テーブル名:** `todo_tasks` （カラム: `id`, `title`, `completed`, `created_at`）
+* **APIエンドポイント:** `/api/v1/todos` （GET, POST, PATCH, DELETE）
+* **画面パス:** `/todo`
+* **既存ルート:** `/` および `/api/db-check` は一切変更・破壊しない。
 
-* **作業内容**:
-* Neon PostgreSQL上にTODOテーブルを作成するためのSQLスクリプトを配置・実行します。
+---
 
-* **対象ファイル**: `sql/todo/020_create_todo_tasks.sql`
-* **手順**:
+## 工程1: SQLファイル作成（Git保存用）
 
-1. `sql/todo/020_create_todo_tasks.sql` に以下のSQLを記述します。
+* **対象ファイル:** `sql/todo/020_create_todo_tasks.sql`
+* **作業内容:** テーブル作成用のSQL文を記述し、Gitに保存する。
 
 ```sql
-CREATE TABLE IF NOT EXISTS todos (
+CREATE TABLE IF NOT EXISTS todo_tasks (
     id SERIAL PRIMARY KEY,
-    title VARCHAR(100) NOT NULL,
-    completed BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    VARCHAR(100) NOT NULL,
+    completed BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 ```
 
-1. 既存の接続確認スクリプト（`sql/000_check_connection.sql` 等）または外部ツール（psqlやNeonコンソール）を利用して上記SQLを実行し、テーブルが正しく作成されることを確認します。
+* **確認コマンド:** `git status` / `git add sql/todo/020_create_todo_tasks.sql`
+* **期待結果:** ファイルが正しくGit管理下に登録されること。
+* **失敗時の確認方法:** ファイルパスやファイル名（`020_create_todo_tasks.sql`）が正しいか確認する。
 
----
+## 工程2: Neon SQL Editorでのテーブル手動作成
 
-### Step 2: バックエンドの実装
+* **対象環境:** Neon PostgreSQL (クラウド上のDB)
+* **作業内容:** NeonのSQL Editorを開き、工程1で作成したSQL（`020_create_todo_tasks.sql` の中身）を実行してテーブルを作成する。
+* **確認コマンド:** Neonコンソール上のテーブル一覧に `todo_tasks` が表示されること、または `SELECT * FROM todo_tasks;` がエラーなく実行できること。
+* **期待結果:** テーブルが作成され、エラーが発生しないこと。
+* **失敗時の確認方法:** 接続しているDB（Neonのプロジェクト）や `DATABASE_URL` が正しいか、SQLの構文エラーがないかを確認する。
 
-* **作業内容**:
-* `src/apps/todo/` 配下にModel、Controller、Routerを実装し、既存のExpressアプリ（`index.ts` および `db.ts`）に組み込みます。
+## 工程3: REQ-01 一覧APIの実装
 
-* **対象ファイル**:
+* **対象ファイル:**
 * `src/apps/todo/todoModel.ts`
 * `src/apps/todo/todoController.ts`
 * `src/apps/todo/todoRouter.ts`
-* `index.ts` （ルーターの登録）
+* `index.ts`（最小限のルーター登録）
 
-* **手順**:
+* **作業内容:**
+* Modelで全件取得クエリ（`SELECT id, title, completed, created_at FROM todo_tasks ORDER BY id DESC;`）を実装。
+* Controllerで結果を整形し `{"data": [...]}`（0件時は `{"data": []}`）として返却する処理を実装。
+* Routerで `GET /api/v1/todos` を定義。
+* `index.ts` に `app.use('/api/v1/todos', todoRouter)` もしくは適切なルーターマウントを追加（既存ルートは維持）。
 
-1. **`todoModel.ts`**: `db.ts` をインポートし、Neon DBに対して `SELECT`, `INSERT`, `UPDATE`, `DELETE` クエリを実行する関数を実装します。
-2. **`todoController.ts`**:
-   * `title` の前後空白除去・1〜100文字チェック、`id` の数値チェックなどのバリデーションを実装します。
-   * アプリ共通のエラーレスポンス形式（`{ success: false, error: { code, message } }`）および成功レスポンス（`{ success: true, data }`）を返すように制御します。
-   * HTTPステータスコード（200, 201, 204, 400, 404, 422, 500, 503）を適切に振り分けます。
+* **確認コマンド:** `npm run dev` 起動後、別ターミナルで `curl -i http://localhost:3000/api/v1/todos` を実行する。
+* **期待結果:** ステータスコード `200 OK` が返り、データ0件なら `{"data": []}` が返ること。
+* **【REQ-01 完了と言える状態】** データ0件ならGETのdataが空配列になり、画面に「TODOがありません」と表示されること。
 
-3. **`todoRouter.ts`**: ExpressのRouterを用い、各HTTPメソッド（GET, POST, PATCH, DELETE）をコントローラーの対応関数にルーティングします。
+* **失敗時の確認方法:** サーバーのコンソールログ、`db.ts` の接続設定、エンドポイントのパスを確認する。
 
-4. **`index.ts`**: `/api/v1/todos` として `todoRouter` をマウントします。また、`/todo` の画面用ルートを追加します。
+## 工程4: REQ-02 登録APIの実装
 
----
+* **対象ファイル:** `src/apps/todo/todoModel.ts`, `src/apps/todo/todoController.ts`, `src/apps/todo/todoRouter.ts`
+* **作業内容:**
+* Modelに `INSERT INTO todo_tasks (title) VALUES ($1) RETURNING ...;` を実装。
+* Controllerで `title` のバリデーション（trim処理、1〜100文字チェック）を行い、不正なら `422`、JSONパース失敗なら `400` を返す。成功時は `201 Created` と作成データを返す。
+* Routerに `POST /api/v1/todos` を追加。
 
-### Step 3: フロントエンド（EJS画面）の実装
+* **確認コマンド:**
+`curl -i -X POST http://localhost:3000/api/v1/todos -H "Content-Type: application/json" -d '{"title":"テストタスク"}'`
+* **期待結果:** ステータスコード `201 Created` と作成されたタスクのJSONが返ること。空文字や100文字超を投げた場合に `422` が返ること。
+* **【REQ-02 完了と言える状態】** バリデーションを通過した有効なタイトルがDBに保存され、作成されたデータがステータス201とともに返却されること。
 
-* **作業内容**:
-* Tailwind CSSを適用したTODO管理画面のテンプレートを作成します。
+* **失敗時の確認方法:** リクエストヘッダーに `Content-Type: application/json` が付いているか、コントローラーのバリデーションロジックを確認する。
 
-* **対象ファイル**: `views/todo/index.ejs`
-* **手順**:
+## 工程5: REQ-03 完了状態の部分更新APIの実装
 
-1. CDN等を利用してTailwind CSSを読み込みます。
-2. 画面内に以下の要素を配置します。
-   * ヘッダー / タイトル
-   * TODO新規登録フォーム（入力欄 ＋ 登録ボタン）
-   * TODO一覧表示エリア（動的にリストやカードを描画するコンテナ）
+* **対象ファイル:** `src/apps/todo/todoModel.ts`, `src/apps/todo/todoController.ts`, `src/apps/todo/todoRouter.ts`
+* **作業内容:**
+* Modelに `UPDATE todo_tasks SET completed = $1 WHERE id = $2 RETURNING ...;` を実装。
+* Controllerで `:id` の整数判定、`completed` のブール値判定を行い、存在しないIDの場合は `404 Not Found` を返す。成功時は `200 OK` と更新後データを返す。
+* Routerに `PATCH /api/v1/todos/:id` を追加。
 
-3. ブラウザ用JavaScript（`/todo/todo.js`）を `<script>` タグで読み込みます。
+* **確認コマンド:**
+`curl -i -X PATCH http://localhost:3000/api/v1/todos/1 -H "Content-Type: application/json" -d '{"completed":true}'`
+* **期待結果:** ステータスコード `200 OK` と `completed: true` に更新されたタスクが返ること。存在しないIDでは `404` が返ること。
+* **【REQ-03 完了と言える状態】** 指定したIDの完了状態（completed）が反転・更新され、存在しないIDの場合は404エラーになること。
 
----
+* **失敗時の確認方法:** URLパラメータのパース処理やSQLのプレースホルダー（`$1, $2`）の順序を確認する。
 
-### Step 4: ブラウザ用JavaScript (`TodoApi` クラス) の実装と結合
+## 工程6: REQ-04 削除APIの実装
 
-* **作業内容**:
-* API通信をカプセル化するクラスを実装し、画面のイベント（一覧取得、登録、完了切り替え、削除）と結合します。
+* **対象ファイル:** `src/apps/todo/todoModel.ts`, `src/apps/todo/todoController.ts`, `src/apps/todo/todoRouter.ts`
+* **作業内容:**
+* Modelに `DELETE FROM todo_tasks WHERE id = $1 RETURNING id;`（または行数確認）を実装。
+* ControllerでIDの存在確認を行い、存在しない場合は `404`、成功時は `204 No Content`（本文なし）を返す。
+* Routerに `DELETE /api/v1/todos/:id` を追加。
 
-* **対象ファイル**: `public/todo/todo.js`
-* **手順**:
+* **確認コマンド:**
+`curl -i -X DELETE http://localhost:3000/api/v1/todos/1`
+* **期待結果:** ステータスコード `204 No Content` が返り、レスポンスボディが空であること。
+* **【REQ-04 完了と言える状態】** 指定したIDのデータがDBから完全に削除され、レスポンスとして204（本文なし）が返ること。
 
-1. `TodoApi` クラスを定義し、Fetch APIを用いたメソッドを実装します。
-   * `fetchTodos()`
-   * `createTodo(title)`
-   * `updateTodoStatus(id, completed)`
-   * `deleteTodo(id)`
+* **失敗時の確認方法:** レスポンスに本文（body）を出力しようとしてエラーになっていないか、ステータスコードの設定を確認する。
 
-2. DOMContentLoadedイベント等で `TodoApi` をインスタンス化し、以下のインタラクションを実装します。
-   * ページ読み込み時に一覧を取得して画面に描画する。
-   * フォーム送信時にバリデーション（クライアント側）と登録処理を行い、一覧を更新する。
-   * 完了チェックボックス変更時にステータスを更新する。
-   * 削除ボタンクリック時に該当TODOを削除する。
+## 工程7: TodoApi クラスの実装（ブラウザ用）
 
----
+* **対象ファイル:** `public/todo/todo.js`
+* **作業内容:**
+* `fetch` APIを用いて、`/api/v1/todos` に対する `getAll()`, `create(title)`, `updateCompleted(id, completed)`, `delete(id)` の各メソッドを持つ `TodoApi` クラスを実装する。
 
-### Step 5: ローカル動作確認およびVercelデプロイ検証
+* **確認コマンド:** ブラウザの開発者ツール（Console）で `TodoApi` インスタンスを作成し、メソッドを手動呼び出しして動作確認する。
+* **期待結果:** 各APIに対して正しくリクエストが飛び、期待通りのPromise（JSONデータ）が返ること。
+* **失敗時の確認方法:** URLのパスやfetchのオプション（Method, Headers, bodyのJSON.stringify等）に誤りがないか確認する。
 
-* **作業内容**:
-* ローカル環境およびVercel環境での動作テストを実施します。
+## 工程8: 画面（EJS）およびUI連動の実装
 
-* **手順**:
-  
-1. **ローカル確認**:
-   * `npm run dev`（または該当する起動コマンド）でサーバーを起動します。
-   * ブラウザで `http://localhost:3000/todo` にアクセスし、REQ-01〜04の操作（一覧・登録・更新・削除）が意図通りに動くことを確認します。
+* **対象ファイル:**
+* `views/todo/index.ejs`
+* `src/apps/todo/todoRouter.ts` （画面表示用のGET `/todo` ルート追加）
 
-2. **Vercelデプロイ確認**:
-   * 変更をGitリポジトリにプッシュし、Vercel（Preview環境）への自動デプロイを実行します。
-   * デプロイ先のプレビューURLにアクセスし、Neon DBとの接続、および一連のTODO操作が正常に動作することを検証します。
+* **作業内容:**
+* `/todo` アクセス時にEJSテンプレートをレンダリングするサーバー側ルートを追加。
+* `views/todo/index.ejs` に入力フォーム、TODOリスト一覧エリア、削除・完了チェックボックスを配置し、`public/todo/todo.js`（TodoApi）と連携させて動的に描画・操作できるようにする。
+
+* **确认コマンド:** `npm run dev` 起動後、ブラウザで `http://localhost:3000/todo` にアクセスする。
+* **期待結果:** 画面が正しく表示され、タスクの追加、完了状態の切り替え、削除がブラウザ上だけで完結（非同期通信）してスムーズに行えること。
+* **失敗時の確認方法:** ブラウザの開発者ツールの「Console」や「Network」タブを開き、JavaScriptのエラーやAPI通信のエラー（4xx, 5xx）が発生していないか確認する。
+
+## 工程9: ローカル環境での総合確認
+
+* **対象環境:** ローカル開発環境 (`npm run dev`)
+* **作業内容:**
+* 既存の `/` および `/api/db-check` が壊れていないことを確認する。
+* `/todo` にてREQ-01〜REQ-04の操作が一連の流れとして正常に動作することを確認する。
+
+* **確認コマンド:**
+* `curl http://localhost:3000/`
+* `curl http://localhost:3000/api/db-check`
+
+* **期待結果:** すべての既存機能および新規TODOアプリが意図通りに動作すること。
+* **失敗時の確認方法:** サーバーログを頼りに、ルーティングの競合や環境変数（`DATABASE_URL`）の読み込み漏れを確認する。
+
+## 工程10: Preview環境での確認（Vercel）
+
+* **対象環境:** Vercel Preview環境
+* **作業内容:**
+* コードをGitにコミット・プッシュし、プルリクエストを作成してVercelのPreviewデプロイを実行する。
+* Vercelの環境変数に `DATABASE_URL` が正しく設定されていることを確認する。
+
+* **確認コマンド:** Vercelが発行するPreview URLにブラウザでアクセスし、`/todo` が動作することを確認する。
+* **期待結果:** ローカルと同様にDBと接続し、CRUD操作が正常に行えること。
+* **失敗時の確認方法:** VercelのDeployment Logsを確認し、ビルドエラーやDB接続エラー（503等）が出ていないか確認する。
+
+## 工程11: PR作成・マージ & Production環境確認
+
+* **対象環境:** Vercel Production環境
+* **作業内容:**
+* Previewでの動作確認後、main（または指定のプロダクションブランチ）へプルリクエストをマージする。
+* Production環境のデプロイ完了を待ち、本番URLで最終確認を行う。
+
+* **確認コマンド:** 本番URLの `/todo` および `/api/db-check` にアクセスする。
+* **期待結果:** すべての機能が本番環境でエラーなく動作すること。
+* **失敗時の確認方法:** Productionのデプロイログおよび環境変数の設定状態を再確認する。
