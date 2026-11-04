@@ -2,6 +2,10 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { pool } from './db'; //DB設定を読み込み
 
+//TODOアプリ
+import todoRouter from './src/apps/todo/todoRouter';
+//TODO_v1 アプリ
+import todoRouter_v1 from './src/apps/todo_v1/todoRouter';
 
 const app = express(); // Expressアプリケーションを作成
 const port: number = 3000; // ローカルで使用するポート番号
@@ -10,12 +14,11 @@ const port: number = 3000; // ローカルで使用するポート番号
 // ------------------------------
 // Expressの基本設定
 // ------------------------------
+app.use(express.json()); // 💡 JSONボディを受け取れるようにする（これが必要です！）
 app.use(express.urlencoded({ extended: true })); // フォームから送信されたデータを受け取れるようにする
 app.use(express.static(path.join(process.cwd(), 'public'))); // CSSや画像などの静的ファイルを公開する
 app.set('view engine', 'ejs'); // テンプレートエンジンにEJSを設定
 app.set('views', path.join(process.cwd(), 'views')); // EJSファイルを保存するフォルダーを指定
-
-
 // ------------------------------
 // ルーティング
 // ------------------------------
@@ -25,6 +28,9 @@ app.set('views', path.join(process.cwd(), 'views')); // EJSファイルを保存
 app.get('/', (req: Request, res: Response): void => {
   res.send('テスト！3');
 });
+
+
+
 
 app.get('/api/db-check', async (_req, res) => {
   try {
@@ -103,6 +109,18 @@ app.post('/db-sample/:id/delete', async (req, res) => {
 });
 
 
+
+//TODOアプリ
+app.use('/todo', todoRouter);
+app.use(todoRouter); // /api/v1/todos のパスを含むためそのまま利用可能
+
+// TODO画面用ルート
+app.get('/todo_v1', (req, res) => {
+  res.render('todo_v1/index.ejs'); // ※プロジェクトのビュー設定パスに合わせて調整
+});
+
+// TODO REST API
+app.use('/api/v1/todo', todoRouter_v1);
 
 // ------------------------------
 // サーバー起動

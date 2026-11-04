@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TODO App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-10 px-4">
+  <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-lg p-6">
+    <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">TODOアプリ</h1>
+
+    <!-- エラー表示用アラート -->
+    <div id="error-alert" class="hidden mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-sm"></div>
+
+    <!-- 登録フォーム -->
+    <form id="todo-form" class="flex gap-2 mb-6">
+      <input type="text" id="todo-input" placeholder="新しいTODOを入力 (1〜100文字)" maxlength="100" required
+        class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      <button type="submit" class="px-5 py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition">登録</button>
+    </form>
+
+    <!-- 一覧表示エリア -->
+    <div id="todo-list" class="space-y-3">
+      <!-- 動的描画 -->
+    </div>
+  </div>
+
+  <script src="/todo_v1/todo.js"></script>
+</body>
+</html>
