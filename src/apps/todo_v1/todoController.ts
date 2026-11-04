@@ -46,7 +46,9 @@ export const TodoController = {
 
   async updateTodo(req: Request, res: Response) {
     try {
-      const id = parseInt(req.params.id, 10);
+      // string | string[] の可能性があるため、配列の場合は先頭要素を取り出す
+      const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const id = parseInt(idParam, 10);
       if (isNaN(id) || id < 1) {
         return res.status(400).json({
           success: false,
@@ -82,7 +84,9 @@ export const TodoController = {
 
   async deleteTodo(req: Request, res: Response) {
     try {
-      const id = parseInt(req.params.id, 10);
+      // string | string[] の可能性があるため、配列の場合は先頭要素を取り出す
+      const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const id = parseInt(idParam, 10);
       if (isNaN(id) || id < 1) {
         return res.status(400).json({
           success: false,
