@@ -46,8 +46,7 @@ export const TodoController = {
 
   async updateTodo(req: Request, res: Response) {
     try {
-      // String() で囲むことで string | string[] 型のエラーを解消
-      const id = parseInt(String(req.params.id), 10);
+      const id = parseInt(req.params.id as string, 10);
       if (isNaN(id) || id < 1) {
         return res.status(400).json({
           success: false,
@@ -83,8 +82,7 @@ export const TodoController = {
 
   async deleteTodo(req: Request, res: Response) {
     try {
-      // String() で囲むことで string | string[] 型のエラーを解消
-      const id = parseInt(String(req.params.id), 10);
+      const id = parseInt(req.params.id as string, 10);
       if (isNaN(id) || id < 1) {
         return res.status(400).json({
           success: false,
