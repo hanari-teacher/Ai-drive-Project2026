@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>AI質問アシスタント</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+        nav { margin-bottom: 20px; }
+        textarea { width: 100%; height: 100px; padding: 10px; box-sizing: border-box; font-size: 1em; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; font-size: 1em; margin-top: 10px; border-radius: 4px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .error { color: red; margin-top: 10px; font-weight: bold; }
+        .history-item { border-bottom: 1px solid #ddd; padding: 15px 0; }
+        .prompt { font-weight: bold; color: #333; }
+        .answer { margin-top: 5px; color: #555; white-space: pre-wrap; background: #f9f9f9; padding: 10px; border-radius: 4px; }
+        .date { font-size: 0.8em; color: #888; margin-top: 5px; }
+        .empty { color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">TOPへ戻る</a> | <a href="/todo">TODOアプリへ</a>
+    </nav>
+
+    <h1>AI質問アシスタント</h1>
+
+    <div id="form-container">
+        <label for="prompt-input">質問を入力してください：</label><br>
+        <textarea id="prompt-input" placeholder="例: TypeScriptのInterfaceとTypeの違いは何ですか？"></textarea><br>
+        <button id="submit-btn">送信する</button>
+        <div id="error-message" class="error"></div>
+    </div>
+
+    <section>
+        <h2>最新の回答</h2>
+        <div id="latest-answer" class="history-item">
+            <p class="empty">ここに最新の回答が表示されます。</p>
+        </div>
+    </section>
+
+    <section>
+        <h2>質問履歴</h2>
+        <div id="history-container">
+            <p class="empty">履歴を読み込んでいます...</p>
+        </div>
+    </section>
+
+    <!-- フロントエンドロジック -->
+    <script src="./app.js"></script>
+</body>
+</html>
