@@ -6,6 +6,8 @@ import { pool } from './db'; //DB設定を読み込み
 import todoRouter from './src/apps/todo/todoRouter';
 //TODO_v1 アプリ
 import todoRouter_v1 from './src/apps/todo_v1/todoRouter';
+//ai
+import aiRouter from './src/apps/ai/aiRouter'; 
 
 const app = express(); // Expressアプリケーションを作成
 const port: number = 3000; // ローカルで使用するポート番号
@@ -121,6 +123,15 @@ app.get('/todo_v1', (req, res) => {
 
 // TODO REST API
 app.use('/api/v1/todo', todoRouter_v1);
+
+// 4. AIルート
+app.use('/api/ai', aiRouter);
+
+// 6. グローバルエラーハンドラー
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(err);
+  res.status(500).json({ success: false, message: 'Internal Server Error' });
+});
 
 // ------------------------------
 // サーバー起動
