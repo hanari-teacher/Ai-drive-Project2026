@@ -8,6 +8,7 @@ import todoRouter from './src/apps/todo/todoRouter';
 import todoRouter_v1 from './src/apps/todo_v1/todoRouter';
 //ai
 import aiRouter from './src/apps/ai/aiRouter'; 
+import aiV2Router from './src/apps/ai/v2/aiRouter';
 
 const app = express(); // Expressアプリケーションを作成
 const port: number = 3000; // ローカルで使用するポート番号
@@ -126,6 +127,7 @@ app.use('/api/v1/todo', todoRouter_v1);
 
 // 4. AIルート
 app.use('/api/ai', aiRouter);
+app.use('/api/ai/v2', aiV2Router); 
 
 // 6. グローバルエラーハンドラー
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
