@@ -5,6 +5,7 @@ import {
   MAX_ROOM_SESSIONS,
   acquireRoomSession,
   cleanupExpiredSessions,
+  deleteRoomSession,
   insertChatMessage,
   isActiveRoomSession,
   releaseRoomSession,
@@ -185,4 +186,11 @@ export async function postMessageToDefaultRoom(params: {
     username: validated.username,
     comment: validated.comment,
   });
+}
+
+
+// chatService.ts に追加する例
+export async function deleteDefaultRoomSession(rawSessionId: unknown): Promise<boolean> {
+  const sessionId = normalizeSessionId(rawSessionId);
+  return deleteRoomSession(sessionId, DEFAULT_ROOM_ID);
 }

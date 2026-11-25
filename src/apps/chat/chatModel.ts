@@ -274,3 +274,20 @@ export async function isActiveRoomSession(
   );
   return Boolean(result.rows[0]?.exists);
 }
+
+
+/**
+ * セッションレコードを直接削除し、席を解放します。
+ */
+export async function deleteRoomSession(
+  sessionId: string,
+  roomId: string = DEFAULT_ROOM_ID
+): Promise<boolean> {
+  const result = await pool.query(
+    `DELETE FROM chat_room_sessions
+     WHERE session_id = $1
+       AND room_id = $2`,
+    [sessionId, roomId]
+  );
+  return (result.rowCount ?? 0) > 0;
+}

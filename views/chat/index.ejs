@@ -14,17 +14,26 @@
   data-max-comment="<%= maxCommentLength %>"
 >
   <div class="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-6">
-    <header class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+<header class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
       <div>
         <h1 class="text-xl font-bold tracking-tight text-slate-900"><%= pageTitle %></h1>
         <p class="mt-0.5 text-xs text-slate-500">ルーム: <span class="font-medium text-slate-700"><%= roomId %></span></p>
       </div>
-      <p
-        id="connection-status"
-        class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
-      >
-        接続状態を確認中...
-      </p>
+      <div class="flex items-center gap-2.5">
+        <p
+          id="connection-status"
+          class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
+        >
+          接続状態を確認中...
+        </p>
+        <button
+          id="leave-button"
+          type="button"
+          class="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          切断
+        </button>
+      </div>
     </header>
 
     <main class="flex flex-1 flex-col gap-4">

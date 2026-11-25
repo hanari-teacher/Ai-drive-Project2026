@@ -5,6 +5,7 @@ import {
   ChatForbiddenError,
   ChatRoomFullError,
   ChatValidationError,
+  deleteDefaultRoomSession,
   getLatestMessagesForMember,
   heartbeatDefaultRoom,
   joinDefaultRoom,
@@ -173,6 +174,7 @@ export async function handleJoinRoom(
 /**
  * POST /api/chat/leave
  */
+// chatController.ts の handleLeaveRoom での使い分け例
 export async function handleLeaveRoom(
   req: Request,
   res: Response,
@@ -180,9 +182,18 @@ export async function handleLeaveRoom(
 ): Promise<void> {
   try {
     const sessionId = getExistingChatSessionId(req);
+    const removeSession = Boolean(
+      req.body && typeof req.body === 'object' && (req.body as Record<string, unknown>).removeSession === true
+    );
+
     if (sessionId) {
-      await leaveDefaultRoom(sessionId);
+      if (removeSession) {
+        await deleteDefaultRoomSession(sessionId);
+      } else {
+        await leaveDefaultRoom(sessionId);
+      }
     }
+
     res.status(200).json({
       ok: true,
       roomId: DEFAULT_ROOM_ID,

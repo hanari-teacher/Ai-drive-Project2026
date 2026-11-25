@@ -12,6 +12,7 @@
   const usernameInputEl = document.getElementById('username-input');
   const commentInputEl = document.getElementById('comment-input');
   const sendButtonEl = document.getElementById('send-button');
+  const leaveButtonEl = document.getElementById('leave-button');
   const initialDataEl = document.getElementById('initial-messages-data');
 
   const POLLING_INTERVAL_MS = 3000;
@@ -23,6 +24,8 @@
   let pollingTimerId = null;
   let heartbeatTimerId = null;
   let isRoomFull = isFullInitial;
+  let isDisconnectedByUser = false;
+  let socket = null;
 
   const STATUS_BADGE_BASE =
     'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors';
@@ -102,6 +105,70 @@
 
     errorEl.appendChild(p);
     errorEl.appendChild(link);
+  }
+
+  function applyDisconnectedUi() {
+    isRoomFull = true;
+    stopBackgroundTimers();
+
+    if (formEl) {
+      formEl.style.display = 'none';
+    }
+    if (sendButtonEl) {
+      sendButtonEl.disabled = true;
+    }
+    if (leaveButtonEl) {
+      leaveButtonEl.disabled = true;
+    }
+
+    setConnectionStatus('切断済み', 'disconnected');
+
+    if (!errorEl) return;
+    errorEl.className =
+      'rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm';
+    errorEl.textContent = '';
+
+    const p = document.createElement('p');
+    p.className = 'font-medium text-slate-800';
+    p.textContent = 'チャットセッションを削除し、切断しました。';
+
+    const link = document.createElement('a');
+    link.href = '/chat';
+    link.className =
+      'mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2';
+    link.textContent = '/chat へ再接続する';
+
+    errorEl.appendChild(p);
+    errorEl.appendChild(link);
+  }
+
+  async function disconnectSession() {
+    if (isDisconnectedByUser) return;
+    isDisconnectedByUser = true;
+
+    applyDisconnectedUi();
+
+    try {
+      await fetch('/api/chat/leave', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, removeSession: true }),
+      });
+    } catch {
+      // 通信失敗時も切断済み表示は維持
+    }
+
+    try {
+      if (socket) {
+        if (socket.io && socket.io.opts) {
+          socket.io.opts.reconnection = false;
+        }
+        socket.disconnect();
+      }
+    } catch {
+      // 例外は無視
+    }
   }
 
   function createMessageElement(msg) {
@@ -203,7 +270,7 @@
   }
 
   async function fetchMessagesFromDb() {
-    if (isRoomFull) return;
+    if (isRoomFull || isDisconnectedByUser) return;
     try {
       const response = await fetch('/api/chat/messages', {
         method: 'GET',
@@ -231,7 +298,7 @@
   }
 
   async function sendHeartbeat() {
-    if (isRoomFull) return;
+    if (isRoomFull || isDisconnectedByUser) return;
     try {
       await fetch('/api/chat/heartbeat', {
         method: 'POST',
@@ -257,6 +324,12 @@
       window.clearInterval(heartbeatTimerId);
       heartbeatTimerId = null;
     }
+  }
+
+  if (leaveButtonEl) {
+    leaveButtonEl.addEventListener('click', () => {
+      disconnectSession();
+    });
   }
 
   // 初期履歴の読み込み
@@ -286,10 +359,11 @@
     return;
   }
 
-  const socket = window.io();
+  socket = window.io();
 
   // ソケットイベントリスナーは初回のみ登録（再接続時に追加登録しない）
   socket.on('connect', () => {
+    if (isDisconnectedByUser) return;
     setConnectionStatus('接続済み', 'connected');
     setErrorMessage('');
     if (sendButtonEl) sendButtonEl.disabled = false;
@@ -307,12 +381,17 @@
   });
 
   socket.on('disconnect', () => {
+    if (isDisconnectedByUser) {
+      setConnectionStatus('切断済み', 'disconnected');
+      return;
+    }
     setConnectionStatus('切断中', 'disconnected');
     if (sendButtonEl) sendButtonEl.disabled = true;
     setErrorMessage('通信が切断されました。切断中はメッセージを送信できません。');
   });
 
   socket.on('connect_error', () => {
+    if (isDisconnectedByUser) return;
     setConnectionStatus('再接続中', 'reconnecting');
     setErrorMessage('サーバーとの通信に失敗しました。');
   });
@@ -335,7 +414,7 @@
       event.preventDefault();
       setErrorMessage('');
 
-      if (!socket.connected) {
+      if (isDisconnectedByUser || !socket || !socket.connected) {
         setErrorMessage('通信が切断されているため送信できません。再接続をお待ちください。');
         return;
       }
@@ -357,7 +436,7 @@
         'chat:message:send',
         { username: rawUsername, comment: rawComment },
         (ack) => {
-          if (sendButtonEl && socket.connected && !isRoomFull) {
+          if (sendButtonEl && socket.connected && !isRoomFull && !isDisconnectedByUser) {
             sendButtonEl.disabled = false;
           }
 
@@ -384,6 +463,7 @@
 
   window.addEventListener('beforeunload', () => {
     stopBackgroundTimers();
+    if (isDisconnectedByUser) return;
     try {
       navigator.sendBeacon('/api/chat/leave', '');
     } catch {
