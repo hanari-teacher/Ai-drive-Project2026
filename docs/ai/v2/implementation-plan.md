@@ -378,7 +378,6 @@ app.use('/api/ai/v2', aiV2Router);
 
 * **対応REQ / DES:** `REQ-V2-01`〜`REQ-V2-07` / `DES-V2-01`〜`DES-V2-06`
 
-
 * **確認先・変更ファイル:**
 * 対象：ブラウザ（`/ai/v2/`、`/ai/`、`/`、`/todo`）、API（`/api/ai/v2/*`）、`.env`、DB（`ai_v2_conversations`、`ai_v2_turns`、`ai_qa_logs`）
 
