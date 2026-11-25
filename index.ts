@@ -1,6 +1,8 @@
+import http from 'http';
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { pool } from './db'; //DB設定を読み込み
+import { Server as SocketIOServer, type Socket } from 'socket.io';
+import { pool } from './db'; // DB設定を読み込み
 
 //TODOアプリ
 import todoRouter from './src/apps/todo/todoRouter';
@@ -10,8 +12,48 @@ import todoRouter_v1 from './src/apps/todo_v1/todoRouter';
 import aiRouter from './src/apps/ai/aiRouter'; 
 import aiV2Router from './src/apps/ai/v2/aiRouter';
 
+import chatRouter from './src/apps/chat/chatRouter';
+import { DEFAULT_ROOM_ID, isActiveRoomSession } from './src/apps/chat/chatModel';
+import {
+  ChatForbiddenError,
+  ChatRoomFullError,
+  ChatValidationError,
+  getLatestMessagesForMember,
+  joinDefaultRoom,
+  leaveDefaultRoom,
+  postMessageToDefaultRoom,
+} from './src/apps/chat/chatService';
+
+type AckCallback<T = Record<string, unknown>> = ((response: T) => void) | undefined;
+
 const app = express(); // Expressアプリケーションを作成
 const port: number = 3000; // ローカルで使用するポート番号
+
+const CHAT_SOCKET_ROOM = `chat:${DEFAULT_ROOM_ID}`;
+const CHAT_SESSION_COOKIE_NAME = 'chat_sid';
+
+function extractChatSessionIdFromHeader(cookieHeader: string | undefined): string | undefined {
+  if (!cookieHeader) return undefined;
+  for (const part of cookieHeader.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx <= 0) continue;
+    const key = part.slice(0, idx).trim();
+    const rawVal = part.slice(idx + 1).trim();
+    if (key === CHAT_SESSION_COOKIE_NAME) {
+      try {
+        const decoded = decodeURIComponent(rawVal);
+        if (/^[a-zA-Z0-9_-]{16,128}$/.test(decoded)) {
+          return decoded;
+        }
+      } catch {
+        if (/^[a-zA-Z0-9_-]{16,128}$/.test(rawVal)) {
+          return rawVal;
+        }
+      }
+    }
+  }
+  return undefined;
+}
 
 
 // ------------------------------
@@ -22,6 +64,7 @@ app.use(express.urlencoded({ extended: true })); // フォームから送信さ�
 app.use(express.static(path.join(process.cwd(), 'public'))); // CSSや画像などの静的ファイルを公開する
 app.set('view engine', 'ejs'); // テンプレートエンジンにEJSを設定
 app.set('views', path.join(process.cwd(), 'views')); // EJSファイルを保存するフォルダーを指定
+
 // ------------------------------
 // ルーティング
 // ------------------------------
@@ -129,17 +172,141 @@ app.use('/api/v1/todo', todoRouter_v1);
 app.use('/api/ai', aiRouter);
 app.use('/api/ai/v2', aiV2Router); 
 
+// 5. チャットルート（/chat および /api/chat/*）
+app.use(chatRouter);
+
 // 6. グローバルエラーハンドラー
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
   res.status(500).json({ success: false, message: 'Internal Server Error' });
 });
 
 // ------------------------------
-// サーバー起動
+// HTTPサーバーとSocket.IOの統合・起動
 // ------------------------------
+const httpServer = http.createServer(app);
+const io = new SocketIOServer(httpServer);
 
+// chatController.ts から io を参照できるよう保存
+app.set('io', io);
 
-app.listen(port, (): void => {
-  console.log(`Server started: http://localhost:${port}`);
+io.on('connection', (socket: Socket) => {
+  const sessionId = extractChatSessionIdFromHeader(socket.handshake.headers.cookie);
+
+  socket.on('chat:join', async (_payload: unknown, ack?: AckCallback) => {
+    try {
+      if (!sessionId) {
+        const errorMessage = 'セッション情報がありません。';
+        if (typeof ack === 'function') ack({ ok: false, reason: 'INVALID', error: errorMessage });
+        socket.emit('chat:error', { code: 'INVALID_SESSION', message: errorMessage });
+        return;
+      }
+
+      const joinResult = await joinDefaultRoom(sessionId);
+      if (joinResult.status === 'full') {
+        const fullError = new ChatRoomFullError();
+        await socket.leave(CHAT_SOCKET_ROOM);
+        socket.emit('chat:room:full', {
+          roomId: DEFAULT_ROOM_ID,
+          message: fullError.message,
+          retryUrl: fullError.retryUrl,
+        });
+        if (typeof ack === 'function') {
+          ack({ ok: false, reason: 'FULL', error: fullError.message });
+        }
+        return;
+      }
+
+      await socket.join(CHAT_SOCKET_ROOM);
+      const messages = await getLatestMessagesForMember(sessionId);
+      if (typeof ack === 'function') {
+        ack({ ok: true, messages });
+      }
+    } catch (error) {
+      console.error('chat:join 処理中にエラーが発生しました', error);
+      const message = '入室処理中にエラーが発生しました。';
+      socket.emit('chat:error', { code: 'JOIN_ERROR', message });
+      if (typeof ack === 'function') {
+        ack({ ok: false, reason: 'ERROR', error: message });
+      }
+    }
+  });
+
+  socket.on('chat:sync:request', async (_payload: unknown, ack?: AckCallback) => {
+    try {
+      if (!sessionId || !(await isActiveRoomSession(sessionId, DEFAULT_ROOM_ID))) {
+        const message = 'チャットルームに参加していないため履歴を取得できません。';
+        socket.emit('chat:error', { code: 'FORBIDDEN', message });
+        if (typeof ack === 'function') {
+          ack({ ok: false, error: message });
+        }
+        return;
+      }
+
+      const messages = await getLatestMessagesForMember(sessionId);
+      if (typeof ack === 'function') {
+        ack({ ok: true, messages });
+      }
+    } catch (error) {
+      console.error('chat:sync:request 処理中にエラーが発生しました', error);
+      const message = '履歴の同期中にエラーが発生しました。';
+      socket.emit('chat:error', { code: 'SYNC_ERROR', message });
+      if (typeof ack === 'function') {
+        ack({ ok: false, error: message });
+      }
+    }
+  });
+
+  socket.on('chat:message:send', async (payload: unknown, ack?: AckCallback) => {
+    try {
+      if (!sessionId) {
+        throw new ChatForbiddenError('チャットルームに参加していないためメッセージを投稿できません。');
+      }
+
+      const data = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+      const saved = await postMessageToDefaultRoom({
+        sessionId,
+        username: data.username,
+        comment: data.comment,
+      });
+
+      // DB保存成功後に同一ルームへ配信
+      io.to(CHAT_SOCKET_ROOM).emit('chat:message:new', saved);
+
+      if (typeof ack === 'function') {
+        ack({ ok: true, message: saved });
+      }
+    } catch (error) {
+      if (error instanceof ChatValidationError || error instanceof ChatForbiddenError) {
+        if (typeof ack === 'function') {
+          ack({ ok: false, reason: error.code, error: error.message });
+        }
+        socket.emit('chat:error', { code: error.code, message: error.message });
+        return;
+      }
+
+      console.error('chat:message:send 処理中にエラーが発生しました', error);
+      const message = 'メッセージの保存または送信に失敗しました。';
+      if (typeof ack === 'function') {
+        ack({ ok: false, reason: 'ERROR', error: message });
+      }
+      socket.emit('chat:error', { code: 'SEND_ERROR', message });
+    }
+  });
+
+  socket.on('disconnect', async () => {
+    try {
+      if (sessionId) {
+        await leaveDefaultRoom(sessionId);
+      }
+    } catch (error) {
+      console.error('Socket disconnect 時の席解放処理に失敗しました', error);
+    }
+  });
+});
+
+const listenPort: number = Number(process.env.PORT) || port;
+
+httpServer.listen(listenPort, (): void => {
+  console.log(`Server started: http://localhost:${listenPort}`);
 });

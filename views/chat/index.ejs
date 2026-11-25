@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= pageTitle %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body
+  class="min-h-screen bg-slate-100 text-slate-800 antialiased"
+  data-room-id="<%= roomId %>"
+  data-is-full="<%= isFull ? 'true' : 'false' %>"
+  data-max-username="<%= maxUsernameLength %>"
+  data-max-comment="<%= maxCommentLength %>"
+>
+  <div class="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-6">
+    <header class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-slate-900"><%= pageTitle %></h1>
+        <p class="mt-0.5 text-xs text-slate-500">ルーム: <span class="font-medium text-slate-700"><%= roomId %></span></p>
+      </div>
+      <p
+        id="connection-status"
+        class="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+      >
+        接続状態を確認中...
+      </p>
+    </header>
+
+    <main class="flex flex-1 flex-col gap-4">
+      <div
+        id="error-banner"
+        role="alert"
+        aria-live="polite"
+        class="empty:hidden rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+      ></div>
+
+      <% if (isFull) { %>
+        <section
+          id="room-full-panel"
+          class="rounded-xl border border-amber-200 bg-white p-6 text-center shadow-sm"
+        >
+          <p id="full-message" class="text-base font-semibold text-slate-900"><%= fullMessage %></p>
+          <p class="mt-4">
+            <a
+              id="retry-chat-link"
+              href="<%= retryUrl %>"
+              class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            >
+              /chat へ再アクセスする
+            </a>
+          </p>
+        </section>
+      <% } else { %>
+        <section
+          id="chat-room-panel"
+          class="flex flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+        >
+          <ul
+            id="message-list"
+            class="flex flex-1 flex-col space-y-2.5 overflow-y-auto p-4 sm:p-5"
+          >
+            <% if (Array.isArray(initialMessages)) { %>
+                <% initialMessages.forEach(function(msg) { %>
+                <% const rawTime = msg.created_at || msg.createdAt; %>
+                <% const parsedTime = rawTime ? new Date(rawTime) : null; %>
+                <% const timeLabel = parsedTime && !Number.isNaN(parsedTime.getTime())
+                    ? parsedTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+                    : ''; %>
+                <li
+                    data-message-id="<%= msg.id %>"
+                    class="flex justify-start"
+                >
+                    <div class="max-w-[80%] rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm leading-relaxed">
+                    <div class="flex items-baseline justify-start gap-2">
+                        <span class="msg-username font-semibold text-slate-700"><%= msg.username %></span>
+                        <% if (timeLabel) { %>
+                        <time class="msg-time text-[11px] text-slate-400" datetime="<%= rawTime %>"><%= timeLabel %></time>
+                        <% } %>
+                    </div>
+                    <div class="msg-comment mt-0.5 whitespace-pre-wrap break-words text-slate-800"><%= msg.comment %></div>
+                    </div>
+                </li>
+                <% }); %>
+            <% } %>
+          </ul>
+
+          <form
+            id="chat-form"
+            action="/api/chat/messages"
+            method="post"
+            class="border-t border-slate-200 bg-slate-50/80 p-4 space-y-3"
+          >
+            <div>
+              <label
+                for="username-input"
+                class="mb-1 block text-xs font-semibold text-slate-700"
+              >
+                ユーザー名（最大 <%= maxUsernameLength %> 文字）
+              </label>
+              <input
+                id="username-input"
+                name="username"
+                type="text"
+                maxlength="<%= maxUsernameLength %>"
+                required
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-2xs transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+
+            <div>
+              <label
+                for="comment-input"
+                class="mb-1 block text-xs font-semibold text-slate-700"
+              >
+                コメント（最大 <%= maxCommentLength %> 文字）
+              </label>
+              <textarea
+                id="comment-input"
+                name="comment"
+                rows="3"
+                maxlength="<%= maxCommentLength %>"
+                required
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-2xs transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              ></textarea>
+            </div>
+
+            <div class="flex justify-end">
+              <button
+                id="send-button"
+                type="submit"
+                class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-2xs transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                送信
+              </button>
+            </div>
+          </form>
+        </section>
+      <% } %>
+    </main>
+  </div>
+
+  <script id="initial-messages-data" type="application/json"><%- JSON.stringify(Array.isArray(initialMessages) ? initialMessages : []).replace(/</g, '\\u003c') %></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/chat/chat.js"></script>
+</body>
+</html>
